@@ -137,10 +137,18 @@ class Object3D extends EventDispatcher {
 		 */
 		this.up = Object3D.DEFAULT_UP.clone();
 
-		const position = new Vector3();
-		const rotation = new Euler();
-		const quaternion = new Quaternion();
-		const scale = new Vector3( 1, 1, 1 );
+		// The transformation properties are read-only (see #4599): replacing them
+		// with new instances would silently break the Euler/Quaternion synchronization.
+		// They are exposed via prototype accessors (see below) and stored in private
+		// fields so the hot path (`updateMatrix()`) does not pay for accessor dispatch.
+
+		this._position = new Vector3();
+		this._rotation = new Euler();
+		this._quaternion = new Quaternion();
+		this._scale = new Vector3( 1, 1, 1 );
+
+		const rotation = this._rotation;
+		const quaternion = this._quaternion;
 
 		function onRotationChange() {
 
@@ -157,73 +165,19 @@ class Object3D extends EventDispatcher {
 		rotation._onChange( onRotationChange );
 		quaternion._onChange( onQuaternionChange );
 
-		Object.defineProperties( this, {
-			/**
-			 * Represents the object's local position.
-			 *
-			 * @name Object3D#position
-			 * @type {Vector3}
-			 * @default (0,0,0)
-			 */
-			position: {
-				configurable: true,
-				enumerable: true,
-				value: position
-			},
-			/**
-			 * Represents the object's local rotation as Euler angles, in radians.
-			 *
-			 * @name Object3D#rotation
-			 * @type {Euler}
-			 * @default (0,0,0)
-			 */
-			rotation: {
-				configurable: true,
-				enumerable: true,
-				value: rotation
-			},
-			/**
-			 * Represents the object's local rotation as Quaternions.
-			 *
-			 * @name Object3D#quaternion
-			 * @type {Quaternion}
-			 */
-			quaternion: {
-				configurable: true,
-				enumerable: true,
-				value: quaternion
-			},
-			/**
-			 * Represents the object's local scale.
-			 *
-			 * @name Object3D#scale
-			 * @type {Vector3}
-			 * @default (1,1,1)
-			 */
-			scale: {
-				configurable: true,
-				enumerable: true,
-				value: scale
-			},
-			/**
-			 * Represents the object's model-view matrix.
-			 *
-			 * @name Object3D#modelViewMatrix
-			 * @type {Matrix4}
-			 */
-			modelViewMatrix: {
-				value: new Matrix4()
-			},
-			/**
-			 * Represents the object's normal matrix.
-			 *
-			 * @name Object3D#normalMatrix
-			 * @type {Matrix3}
-			 */
-			normalMatrix: {
-				value: new Matrix3()
-			}
-		} );
+		/**
+		 * Represents the object's model-view matrix.
+		 *
+		 * @type {Matrix4}
+		 */
+		this.modelViewMatrix = new Matrix4();
+
+		/**
+		 * Represents the object's normal matrix.
+		 *
+		 * @type {Matrix3}
+		 */
+		this.normalMatrix = new Matrix3();
 
 		/**
 		 * Represents the object's transformation matrix in local space.
@@ -390,6 +344,57 @@ class Object3D extends EventDispatcher {
 	}
 
 	/**
+	 * Represents the object's local position.
+	 *
+	 * @type {Vector3}
+	 * @default (0,0,0)
+	 * @readonly
+	 */
+	get position() {
+
+		return this._position;
+
+	}
+
+	/**
+	 * Represents the object's local rotation as Euler angles, in radians.
+	 *
+	 * @type {Euler}
+	 * @default (0,0,0)
+	 * @readonly
+	 */
+	get rotation() {
+
+		return this._rotation;
+
+	}
+
+	/**
+	 * Represents the object's local rotation as Quaternions.
+	 *
+	 * @type {Quaternion}
+	 * @readonly
+	 */
+	get quaternion() {
+
+		return this._quaternion;
+
+	}
+
+	/**
+	 * Represents the object's local scale.
+	 *
+	 * @type {Vector3}
+	 * @default (1,1,1)
+	 * @readonly
+	 */
+	get scale() {
+
+		return this._scale;
+
+	}
+
+	/**
 	 * A callback that is executed immediately before a 3D object is rendered to a shadow map.
 	 *
 	 * @param {Renderer|WebGLRenderer} renderer - The renderer.
@@ -451,7 +456,7 @@ class Object3D extends EventDispatcher {
 
 		this.matrix.premultiply( matrix );
 
-		this.matrix.decompose( this.position, this.quaternion, this.scale );
+		this.matrix.decompose( this._position, this._quaternion, this._scale );
 
 	}
 
@@ -706,6 +711,7 @@ class Object3D extends EventDispatcher {
 		}
 
 		const parent = this.parent;
+		const quaternion = this._quaternion;
 
 		this.updateWorldMatrix( true, false );
 
@@ -721,13 +727,13 @@ class Object3D extends EventDispatcher {
 
 		}
 
-		this.quaternion.setFromRotationMatrix( _m1 );
+		quaternion.setFromRotationMatrix( _m1 );
 
 		if ( parent ) {
 
 			_m1.extractRotation( parent.matrixWorld );
 			_q1.setFromRotationMatrix( _m1 );
-			this.quaternion.premultiply( _q1.invert() );
+			quaternion.premultiply( _q1.invert() );
 
 		}
 
@@ -1143,7 +1149,7 @@ class Object3D extends EventDispatcher {
 	 */
 	updateMatrix() {
 
-		this.matrix.compose( this.position, this.quaternion, this.scale );
+		this.matrix.compose( this._position, this._quaternion, this._scale );
 
 		const pivot = this.pivot;
 
