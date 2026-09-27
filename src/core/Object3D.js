@@ -137,10 +137,53 @@ class Object3D extends EventDispatcher {
 		 */
 		this.up = Object3D.DEFAULT_UP.clone();
 
-		const position = new Vector3();
-		const rotation = new Euler();
-		const quaternion = new Quaternion();
-		const scale = new Vector3( 1, 1, 1 );
+		/**
+		 * Represents the object's local position.
+		 *
+		 * @type {Vector3}
+		 * @default (0,0,0)
+		 */
+		this.position = new Vector3();
+
+		/**
+		 * Represents the object's local rotation as Euler angles, in radians.
+		 *
+		 * @type {Euler}
+		 * @default (0,0,0)
+		 */
+		this.rotation = new Euler();
+
+		/**
+		 * Represents the object's local rotation as Quaternions.
+		 *
+		 * @type {Quaternion}
+		 */
+		this.quaternion = new Quaternion();
+
+		/**
+		 * Represents the object's local scale.
+		 *
+		 * @type {Vector3}
+		 * @default (1,1,1)
+		 */
+		this.scale = new Vector3( 1, 1, 1 );
+
+		/**
+		 * Represents the object's model-view matrix.
+		 *
+		 * @type {Matrix4}
+		 */
+		this.modelViewMatrix = new Matrix4();
+
+		/**
+		 * Represents the object's normal matrix.
+		 *
+		 * @type {Matrix3}
+		 */
+		this.normalMatrix = new Matrix3();
+
+		const rotation = this.rotation;
+		const quaternion = this.quaternion;
 
 		function onRotationChange() {
 
@@ -156,74 +199,6 @@ class Object3D extends EventDispatcher {
 
 		rotation._onChange( onRotationChange );
 		quaternion._onChange( onQuaternionChange );
-
-		Object.defineProperties( this, {
-			/**
-			 * Represents the object's local position.
-			 *
-			 * @name Object3D#position
-			 * @type {Vector3}
-			 * @default (0,0,0)
-			 */
-			position: {
-				configurable: true,
-				enumerable: true,
-				value: position
-			},
-			/**
-			 * Represents the object's local rotation as Euler angles, in radians.
-			 *
-			 * @name Object3D#rotation
-			 * @type {Euler}
-			 * @default (0,0,0)
-			 */
-			rotation: {
-				configurable: true,
-				enumerable: true,
-				value: rotation
-			},
-			/**
-			 * Represents the object's local rotation as Quaternions.
-			 *
-			 * @name Object3D#quaternion
-			 * @type {Quaternion}
-			 */
-			quaternion: {
-				configurable: true,
-				enumerable: true,
-				value: quaternion
-			},
-			/**
-			 * Represents the object's local scale.
-			 *
-			 * @name Object3D#scale
-			 * @type {Vector3}
-			 * @default (1,1,1)
-			 */
-			scale: {
-				configurable: true,
-				enumerable: true,
-				value: scale
-			},
-			/**
-			 * Represents the object's model-view matrix.
-			 *
-			 * @name Object3D#modelViewMatrix
-			 * @type {Matrix4}
-			 */
-			modelViewMatrix: {
-				value: new Matrix4()
-			},
-			/**
-			 * Represents the object's normal matrix.
-			 *
-			 * @name Object3D#normalMatrix
-			 * @type {Matrix3}
-			 */
-			normalMatrix: {
-				value: new Matrix3()
-			}
-		} );
 
 		/**
 		 * Represents the object's transformation matrix in local space.
