@@ -79,6 +79,16 @@ class Skeleton {
 		 */
 		this.boneTexture = null;
 
+		/**
+		 * Snapshot of the bone world matrices and inverse matrices the
+		 * {@link Skeleton#boneMatrices} were last computed from (32 floats per
+		 * bone). Used by {@link Skeleton#update} to skip the flatten when nothing
+		 * moved. Reset by {@link Skeleton#init}.
+		 *
+		 * @type {?Float64Array}
+		 */
+		this._boneSnapshot = null;
+
 		this.init();
 
 	}
@@ -94,6 +104,10 @@ class Skeleton {
 		const boneInverses = this.boneInverses;
 
 		this.boneMatrices = new Float32Array( bones.length * 16 );
+
+		// The output was reallocated (zeroed): force recomputation on the next update().
+
+		this._boneSnapshot = null;
 
 		// calculate inverse bone matrices if necessary
 
@@ -203,6 +217,41 @@ class Skeleton {
 		const boneMatrices = this.boneMatrices;
 		const boneTexture = this.boneTexture;
 
+		// Skip the flatten when neither the bone world matrices nor the inverses
+		// changed since the last update: the output would be bit-identical.
+		// This is the common case for non-animated skeletons.
+
+		let snapshot = this._boneSnapshot;
+		let unchanged = snapshot !== null && snapshot.length === bones.length * 32;
+
+		if ( unchanged ) {
+
+			for ( let i = 0; i < bones.length; i ++ ) {
+
+				const bone = bones[ i ];
+				const mw = bone ? bone.matrixWorld.elements : _identityMatrix.elements;
+				const inv = boneInverses[ i ] ? boneInverses[ i ].elements : _identityMatrix.elements;
+				const o = i * 32;
+
+				for ( let j = 0; j < 16; j ++ ) {
+
+					if ( mw[ j ] !== snapshot[ o + j ] || inv[ j ] !== snapshot[ o + 16 + j ] ) {
+
+						unchanged = false;
+						break;
+
+					}
+
+				}
+
+				if ( unchanged === false ) break;
+
+			}
+
+		}
+
+		if ( unchanged === true ) return;
+
 		// flatten bone matrices to array
 
 		for ( let i = 0, il = bones.length; i < il; i ++ ) {
@@ -213,6 +262,28 @@ class Skeleton {
 
 			_offsetMatrix.multiplyMatrices( matrix, boneInverses[ i ] );
 			_offsetMatrix.toArray( boneMatrices, i * 16 );
+
+		}
+
+		if ( snapshot === null || snapshot.length !== bones.length * 32 ) {
+
+			snapshot = this._boneSnapshot = new Float64Array( bones.length * 32 );
+
+		}
+
+		for ( let i = 0; i < bones.length; i ++ ) {
+
+			const bone = bones[ i ];
+			const mw = bone ? bone.matrixWorld.elements : _identityMatrix.elements;
+			const inv = boneInverses[ i ] ? boneInverses[ i ].elements : _identityMatrix.elements;
+			const o = i * 32;
+
+			for ( let j = 0; j < 16; j ++ ) {
+
+				snapshot[ o + j ] = mw[ j ];
+				snapshot[ o + 16 + j ] = inv[ j ];
+
+			}
 
 		}
 

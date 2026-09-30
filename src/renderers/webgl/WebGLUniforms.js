@@ -717,7 +717,13 @@ function getSingularSetter( type ) {
 
 function setValueV1fArray( gl, v ) {
 
+	const cache = this.cache;
+
+	if ( arraysEqual( cache, v ) ) return;
+
 	gl.uniform1fv( this.addr, v );
+
+	copyArray( cache, v );
 
 }
 
@@ -725,25 +731,43 @@ function setValueV1fArray( gl, v ) {
 
 function setValueV2fArray( gl, v ) {
 
+	const cache = this.cache;
+
 	const data = flatten( v, this.size, 2 );
 
+	if ( arraysEqual( cache, data ) ) return;
+
 	gl.uniform2fv( this.addr, data );
+
+	copyArray( cache, data );
 
 }
 
 function setValueV3fArray( gl, v ) {
 
+	const cache = this.cache;
+
 	const data = flatten( v, this.size, 3 );
 
+	if ( arraysEqual( cache, data ) ) return;
+
 	gl.uniform3fv( this.addr, data );
+
+	copyArray( cache, data );
 
 }
 
 function setValueV4fArray( gl, v ) {
 
+	const cache = this.cache;
+
 	const data = flatten( v, this.size, 4 );
 
+	if ( arraysEqual( cache, data ) ) return;
+
 	gl.uniform4fv( this.addr, data );
+
+	copyArray( cache, data );
 
 }
 
@@ -751,25 +775,43 @@ function setValueV4fArray( gl, v ) {
 
 function setValueM2Array( gl, v ) {
 
+	const cache = this.cache;
+
 	const data = flatten( v, this.size, 4 );
 
+	if ( arraysEqual( cache, data ) ) return;
+
 	gl.uniformMatrix2fv( this.addr, false, data );
+
+	copyArray( cache, data );
 
 }
 
 function setValueM3Array( gl, v ) {
 
+	const cache = this.cache;
+
 	const data = flatten( v, this.size, 9 );
 
+	if ( arraysEqual( cache, data ) ) return;
+
 	gl.uniformMatrix3fv( this.addr, false, data );
+
+	copyArray( cache, data );
 
 }
 
 function setValueM4Array( gl, v ) {
 
+	const cache = this.cache;
+
 	const data = flatten( v, this.size, 16 );
 
+	if ( arraysEqual( cache, data ) ) return;
+
 	gl.uniformMatrix4fv( this.addr, false, data );
+
+	copyArray( cache, data );
 
 }
 
@@ -777,7 +819,13 @@ function setValueM4Array( gl, v ) {
 
 function setValueV1iArray( gl, v ) {
 
+	const cache = this.cache;
+
+	if ( arraysEqual( cache, v ) ) return;
+
 	gl.uniform1iv( this.addr, v );
+
+	copyArray( cache, v );
 
 }
 
@@ -785,19 +833,37 @@ function setValueV1iArray( gl, v ) {
 
 function setValueV2iArray( gl, v ) {
 
+	const cache = this.cache;
+
+	if ( arraysEqual( cache, v ) ) return;
+
 	gl.uniform2iv( this.addr, v );
+
+	copyArray( cache, v );
 
 }
 
 function setValueV3iArray( gl, v ) {
 
+	const cache = this.cache;
+
+	if ( arraysEqual( cache, v ) ) return;
+
 	gl.uniform3iv( this.addr, v );
+
+	copyArray( cache, v );
 
 }
 
 function setValueV4iArray( gl, v ) {
 
+	const cache = this.cache;
+
+	if ( arraysEqual( cache, v ) ) return;
+
 	gl.uniform4iv( this.addr, v );
+
+	copyArray( cache, v );
 
 }
 
@@ -805,7 +871,13 @@ function setValueV4iArray( gl, v ) {
 
 function setValueV1uiArray( gl, v ) {
 
+	const cache = this.cache;
+
+	if ( arraysEqual( cache, v ) ) return;
+
 	gl.uniform1uiv( this.addr, v );
+
+	copyArray( cache, v );
 
 }
 
@@ -813,19 +885,37 @@ function setValueV1uiArray( gl, v ) {
 
 function setValueV2uiArray( gl, v ) {
 
+	const cache = this.cache;
+
+	if ( arraysEqual( cache, v ) ) return;
+
 	gl.uniform2uiv( this.addr, v );
+
+	copyArray( cache, v );
 
 }
 
 function setValueV3uiArray( gl, v ) {
 
+	const cache = this.cache;
+
+	if ( arraysEqual( cache, v ) ) return;
+
 	gl.uniform3uiv( this.addr, v );
+
+	copyArray( cache, v );
 
 }
 
 function setValueV4uiArray( gl, v ) {
 
+	const cache = this.cache;
+
+	if ( arraysEqual( cache, v ) ) return;
+
 	gl.uniform4uiv( this.addr, v );
+
+	copyArray( cache, v );
 
 }
 

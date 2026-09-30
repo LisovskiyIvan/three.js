@@ -548,20 +548,23 @@ class Box3 {
 		// test against axes that are given by cross product combinations of the edges of the triangle and the edges of the aabb
 		// make an axis testing of each of the 3 sides of the aabb against each of the 3 sides of the triangle = 9 axis of separation
 		// axis_ij = u_i x f_j (u0, u1, u2 = face normals of aabb = x,y,z axes vectors since aabb is axis aligned)
-		let axes = [
-			0, - _f0.z, _f0.y, 0, - _f1.z, _f1.y, 0, - _f2.z, _f2.y,
-			_f0.z, 0, - _f0.x, _f1.z, 0, - _f1.x, _f2.z, 0, - _f2.x,
-			- _f0.y, _f0.x, 0, - _f1.y, _f1.x, 0, - _f2.y, _f2.x, 0
-		];
-		if ( ! satForAxes( axes, _v0, _v1, _v2, _extents ) ) {
+		_satAxes[ 0 ] = 0; _satAxes[ 1 ] = - _f0.z; _satAxes[ 2 ] = _f0.y;
+		_satAxes[ 3 ] = 0; _satAxes[ 4 ] = - _f1.z; _satAxes[ 5 ] = _f1.y;
+		_satAxes[ 6 ] = 0; _satAxes[ 7 ] = - _f2.z; _satAxes[ 8 ] = _f2.y;
+		_satAxes[ 9 ] = _f0.z; _satAxes[ 10 ] = 0; _satAxes[ 11 ] = - _f0.x;
+		_satAxes[ 12 ] = _f1.z; _satAxes[ 13 ] = 0; _satAxes[ 14 ] = - _f1.x;
+		_satAxes[ 15 ] = _f2.z; _satAxes[ 16 ] = 0; _satAxes[ 17 ] = - _f2.x;
+		_satAxes[ 18 ] = - _f0.y; _satAxes[ 19 ] = _f0.x; _satAxes[ 20 ] = 0;
+		_satAxes[ 21 ] = - _f1.y; _satAxes[ 22 ] = _f1.x; _satAxes[ 23 ] = 0;
+		_satAxes[ 24 ] = - _f2.y; _satAxes[ 25 ] = _f2.x; _satAxes[ 26 ] = 0;
+		if ( ! satForAxes( _satAxes, _v0, _v1, _v2, _extents ) ) {
 
 			return false;
 
 		}
 
 		// test 3 face normals from the aabb
-		axes = [ 1, 0, 0, 0, 1, 0, 0, 0, 1 ];
-		if ( ! satForAxes( axes, _v0, _v1, _v2, _extents ) ) {
+		if ( ! satForAxes( _aabbAxes, _v0, _v1, _v2, _extents ) ) {
 
 			return false;
 
@@ -570,9 +573,9 @@ class Box3 {
 		// finally testing the face normal of the triangle
 		// use already existing triangle edge vectors here
 		_triangleNormal.crossVectors( _f0, _f1 );
-		axes = [ _triangleNormal.x, _triangleNormal.y, _triangleNormal.z ];
+		_triAxis[ 0 ] = _triangleNormal.x; _triAxis[ 1 ] = _triangleNormal.y; _triAxis[ 2 ] = _triangleNormal.z;
 
-		return satForAxes( axes, _v0, _v1, _v2, _extents );
+		return satForAxes( _triAxis, _v0, _v1, _v2, _extents );
 
 	}
 
@@ -780,6 +783,14 @@ const _center = /*@__PURE__*/ new Vector3();
 const _extents = /*@__PURE__*/ new Vector3();
 const _triangleNormal = /*@__PURE__*/ new Vector3();
 const _testAxis = /*@__PURE__*/ new Vector3();
+
+// Scratch storage for the SAT axes in intersectsTriangle(), avoiding 3 array
+// allocations (40 numbers) per test. Fixed max size: 9 cross-product axes x 3.
+const _satAxes = new Float64Array( 27 );
+// The 3 AABB face normals never change.
+const _aabbAxes = new Float64Array( [ 1, 0, 0, 0, 1, 0, 0, 0, 1 ] );
+// The triangle face normal axis.
+const _triAxis = new Float64Array( 3 );
 
 function satForAxes( axes, v0, v1, v2, extents ) {
 

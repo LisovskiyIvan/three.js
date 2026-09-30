@@ -19,6 +19,21 @@ const _box = /*@__PURE__*/ new Box3();
 const _boxMorphTargets = /*@__PURE__*/ new Box3();
 const _vector = /*@__PURE__*/ new Vector3();
 
+// Scratch vectors for computeTangents(), avoiding per-call allocations.
+const _tanVA = /*@__PURE__*/ new Vector3();
+const _tanVB = /*@__PURE__*/ new Vector3();
+const _tanVC = /*@__PURE__*/ new Vector3();
+const _tanUvA = /*@__PURE__*/ new Vector2();
+const _tanUvB = /*@__PURE__*/ new Vector2();
+const _tanUvC = /*@__PURE__*/ new Vector2();
+const _tanSdir = /*@__PURE__*/ new Vector3();
+const _tanTdir = /*@__PURE__*/ new Vector3();
+const _tanTmp = /*@__PURE__*/ new Vector3();
+const _tanTmp2 = /*@__PURE__*/ new Vector3();
+const _tanN = /*@__PURE__*/ new Vector3();
+const _tanN2 = /*@__PURE__*/ new Vector3();
+const _tanT = /*@__PURE__*/ new Vector3();
+
 /**
  * A representation of mesh, line, or point geometry. Includes vertex
  * positions, face indices, normals, colors, UVs, and custom attributes
@@ -865,26 +880,25 @@ class BufferGeometry extends EventDispatcher {
 
 		}
 
-		const tan1 = [], tan2 = [];
-		const used = new Uint8Array( positionAttribute.count );
+		const vertexCount = positionAttribute.count;
 
-		for ( let i = 0; i < positionAttribute.count; i ++ ) {
+		// Flat arrays instead of 2N Vector3 objects: same accumulation math,
+		// O(1) allocations instead of O(N).
 
-			tan1[ i ] = new Vector3();
-			tan2[ i ] = new Vector3();
+		const tan1 = new Float32Array( vertexCount * 3 );
+		const tan2 = new Float32Array( vertexCount * 3 );
+		const used = new Uint8Array( vertexCount );
 
-		}
+		const vA = _tanVA,
+			vB = _tanVB,
+			vC = _tanVC,
 
-		const vA = new Vector3(),
-			vB = new Vector3(),
-			vC = new Vector3(),
+			uvA = _tanUvA,
+			uvB = _tanUvB,
+			uvC = _tanUvC,
 
-			uvA = new Vector2(),
-			uvB = new Vector2(),
-			uvC = new Vector2(),
-
-			sdir = new Vector3(),
-			tdir = new Vector3();
+			sdir = _tanSdir,
+			tdir = _tanTdir;
 
 		function handleTriangle( a, b, c ) {
 
@@ -913,13 +927,15 @@ class BufferGeometry extends EventDispatcher {
 			sdir.copy( vB ).multiplyScalar( uvC.y ).addScaledVector( vC, - uvB.y ).multiplyScalar( r );
 			tdir.copy( vC ).multiplyScalar( uvB.x ).addScaledVector( vB, - uvC.x ).multiplyScalar( r );
 
-			tan1[ a ].add( sdir );
-			tan1[ b ].add( sdir );
-			tan1[ c ].add( sdir );
+			const a3 = a * 3, b3 = b * 3, c3 = c * 3;
 
-			tan2[ a ].add( tdir );
-			tan2[ b ].add( tdir );
-			tan2[ c ].add( tdir );
+			tan1[ a3 ] += sdir.x; tan1[ a3 + 1 ] += sdir.y; tan1[ a3 + 2 ] += sdir.z;
+			tan1[ b3 ] += sdir.x; tan1[ b3 + 1 ] += sdir.y; tan1[ b3 + 2 ] += sdir.z;
+			tan1[ c3 ] += sdir.x; tan1[ c3 + 1 ] += sdir.y; tan1[ c3 + 2 ] += sdir.z;
+
+			tan2[ a3 ] += tdir.x; tan2[ a3 + 1 ] += tdir.y; tan2[ a3 + 2 ] += tdir.z;
+			tan2[ b3 ] += tdir.x; tan2[ b3 + 1 ] += tdir.y; tan2[ b3 + 2 ] += tdir.z;
+			tan2[ c3 ] += tdir.x; tan2[ c3 + 1 ] += tdir.y; tan2[ c3 + 2 ] += tdir.z;
 
 		}
 
@@ -953,15 +969,17 @@ class BufferGeometry extends EventDispatcher {
 
 		}
 
-		const tmp = new Vector3(), tmp2 = new Vector3();
-		const n = new Vector3(), n2 = new Vector3();
+		const tmp = _tanTmp, tmp2 = _tanTmp2;
+		const n = _tanN, n2 = _tanN2;
+		const t = _tanT;
 
 		function handleVertex( v ) {
 
 			n.fromBufferAttribute( normalAttribute, v );
 			n2.copy( n );
 
-			const t = tan1[ v ];
+			const v3 = v * 3;
+			t.set( tan1[ v3 ], tan1[ v3 + 1 ], tan1[ v3 + 2 ] );
 
 			// Gram-Schmidt orthogonalize
 
@@ -971,7 +989,7 @@ class BufferGeometry extends EventDispatcher {
 			// Calculate handedness
 
 			tmp2.crossVectors( n2, t );
-			const test = tmp2.dot( tan2[ v ] );
+			const test = tmp2.x * tan2[ v3 ] + tmp2.y * tan2[ v3 + 1 ] + tmp2.z * tan2[ v3 + 2 ];
 			const w = ( test < 0.0 ) ? - 1.0 : 1.0;
 
 			tangentAttribute.setXYZW( v, tmp.x, tmp.y, tmp.z, w );

@@ -201,7 +201,7 @@ class Raycaster {
 
 		intersect( object, this, intersects, recursive );
 
-		intersects.sort( ascSort );
+		if ( intersects.length > 1 ) intersects.sort( ascSort );
 
 		return intersects;
 
@@ -225,7 +225,7 @@ class Raycaster {
 
 		}
 
-		intersects.sort( ascSort );
+		if ( intersects.length > 1 ) intersects.sort( ascSort );
 
 		return intersects;
 

@@ -274,9 +274,30 @@ class Object3D extends EventDispatcher {
 		this.matrixWorldNeedsUpdate = false;
 
 		/**
+		 * Cache of the last position/quaternion/scale/pivot values the local matrix
+		 * was composed from. Used by {@link Object3D#updateMatrix} to skip redundant
+		 * recomputation for static objects.
+		 * Layout: [px,py,pz, qx,qy,qz,qw, sx,sy,sz, pvx,pvy,pvz].
+		 * Zero-initialized on purpose: it never matches the defaults (qw=1, s=1,1,1),
+		 * so the first `updateMatrix()` call always composes.
+		 * Float64 to match the precision of the transform values exactly.
+		 *
+		 * @type {Float64Array}
+		 */
+		this._matrixCache = new Float64Array( 29 );
+
+		/**
+		 * The pivot reference the local matrix was last composed with (`null` when
+		 * there was no pivot). Compared by reference first, then by value.
+		 *
+		 * @type {?Vector3}
+		 */
+		this._matrixCachePivot = null;
+
+		/**
 		 * The layer membership of the 3D object. The 3D object is only visible if it has
-		 * at least one layer in common with the camera in use. This property can also be
-		 * used to filter out unwanted objects in ray-intersection tests when using {@link Raycaster}.
+		 * at least one layer in common with the camera in use. This property can also
+		 * be used to filter out unwanted objects in ray-intersection tests when using {@link Raycaster}.
 		 *
 		 * @type {Layers}
 		 */
@@ -1143,18 +1164,62 @@ class Object3D extends EventDispatcher {
 	 */
 	updateMatrix() {
 
-		this.matrix.compose( this.position, this.quaternion, this.scale );
-
+		const position = this.position;
+		const quaternion = this.quaternion;
+		const scale = this.scale;
 		const pivot = this.pivot;
+		const cache = this._matrixCache;
+		const me = this.matrix.elements;
+
+		// Skip the recomposition only when the transform hasn't changed since the
+		// last call AND the matrix still holds the last composed result. The matrix
+		// check preserves the specified behavior that a directly mutated matrix
+		// (e.g. `object.matrix.identity()`) is recomputed from the transform.
+		// `matrixWorldNeedsUpdate` stays untouched on skip, so flags set by external
+		// writers (animation bindings, XR, helpers) are preserved.
+
+		if ( pivot === this._matrixCachePivot &&
+			position.x === cache[ 0 ] && position.y === cache[ 1 ] && position.z === cache[ 2 ] &&
+			quaternion._x === cache[ 3 ] && quaternion._y === cache[ 4 ] && quaternion._z === cache[ 5 ] && quaternion._w === cache[ 6 ] &&
+			scale.x === cache[ 7 ] && scale.y === cache[ 8 ] && scale.z === cache[ 9 ] &&
+			( pivot === null || ( pivot.x === cache[ 10 ] && pivot.y === cache[ 11 ] && pivot.z === cache[ 12 ] ) ) &&
+			me[ 0 ] === cache[ 13 ] && me[ 1 ] === cache[ 14 ] && me[ 2 ] === cache[ 15 ] && me[ 3 ] === cache[ 16 ] &&
+			me[ 4 ] === cache[ 17 ] && me[ 5 ] === cache[ 18 ] && me[ 6 ] === cache[ 19 ] && me[ 7 ] === cache[ 20 ] &&
+			me[ 8 ] === cache[ 21 ] && me[ 9 ] === cache[ 22 ] && me[ 10 ] === cache[ 23 ] && me[ 11 ] === cache[ 24 ] &&
+			me[ 12 ] === cache[ 25 ] && me[ 13 ] === cache[ 26 ] && me[ 14 ] === cache[ 27 ] && me[ 15 ] === cache[ 28 ] ) {
+
+			return;
+
+		}
+
+		cache[ 0 ] = position.x; cache[ 1 ] = position.y; cache[ 2 ] = position.z;
+		cache[ 3 ] = quaternion._x; cache[ 4 ] = quaternion._y; cache[ 5 ] = quaternion._z; cache[ 6 ] = quaternion._w;
+		cache[ 7 ] = scale.x; cache[ 8 ] = scale.y; cache[ 9 ] = scale.z;
+
+		if ( pivot !== null ) {
+
+			cache[ 10 ] = pivot.x; cache[ 11 ] = pivot.y; cache[ 12 ] = pivot.z;
+
+		}
+
+		this._matrixCachePivot = pivot;
+
+		this.matrix.compose( position, quaternion, scale );
 
 		if ( pivot !== null ) {
 
 			const px = pivot.x, py = pivot.y, pz = pivot.z;
-			const te = this.matrix.elements;
+			const te = me;
 
 			te[ 12 ] += px - te[ 0 ] * px - te[ 4 ] * py - te[ 8 ] * pz;
 			te[ 13 ] += py - te[ 1 ] * px - te[ 5 ] * py - te[ 9 ] * pz;
 			te[ 14 ] += pz - te[ 2 ] * px - te[ 6 ] * py - te[ 10 ] * pz;
+
+		}
+
+		for ( let i = 0; i < 16; i ++ ) {
+
+			cache[ 13 + i ] = me[ i ];
 
 		}
 

@@ -83,6 +83,26 @@ class SkinnedMesh extends Mesh {
 		this.bindMatrixInverse = new Matrix4();
 
 		/**
+		 * Snapshot of the matrix {@link SkinnedMesh#bindMatrixInverse} was last
+		 * computed from (either `matrixWorld` or `bindMatrix`). Used by
+		 * {@link SkinnedMesh#updateMatrixWorld} to skip the redundant inversion
+		 * for static meshes.
+		 *
+		 * @type {Float64Array}
+		 */
+		this._bindMatrixInverseCache = new Float64Array( 16 );
+
+		/**
+		 * Forces recomputation of {@link SkinnedMesh#bindMatrixInverse} on the
+		 * next {@link SkinnedMesh#updateMatrixWorld}. Set by methods that write
+		 * `bindMatrixInverse` directly ({@link SkinnedMesh#bind},
+		 * {@link SkinnedMesh#copy}).
+		 *
+		 * @type {boolean}
+		 */
+		this._bindMatrixInverseDirty = true;
+
+		/**
 		 * The bounding box of the skinned mesh. Can be computed via {@link SkinnedMesh#computeBoundingBox}.
 		 *
 		 * @type {?Box3}
@@ -166,6 +186,10 @@ class SkinnedMesh extends Mesh {
 		this.bindMatrix.copy( source.bindMatrix );
 		this.bindMatrixInverse.copy( source.bindMatrixInverse );
 
+		// copy() writes bindMatrixInverse directly: see bind() above.
+
+		this._bindMatrixInverseDirty = true;
+
 		this.skeleton = source.skeleton;
 
 		this.boundingBox = source.boundingBox !== null ? source.boundingBox.clone() : null;
@@ -244,6 +268,11 @@ class SkinnedMesh extends Mesh {
 		this.bindMatrix.copy( bindMatrix );
 		this.bindMatrixInverse.copy( bindMatrix ).invert();
 
+		// bind() writes bindMatrixInverse directly: force recomputation on the
+		// next updateMatrixWorld() to preserve the unconditional-invert behavior.
+
+		this._bindMatrixInverseDirty = true;
+
 	}
 
 	/**
@@ -293,17 +322,48 @@ class SkinnedMesh extends Mesh {
 
 		if ( this.bindMode === AttachedBindMode ) {
 
-			this.bindMatrixInverse.copy( this.matrixWorld ).invert();
+			this._updateBindMatrixInverse( this.matrixWorld );
 
 		} else if ( this.bindMode === DetachedBindMode ) {
 
-			this.bindMatrixInverse.copy( this.bindMatrix ).invert();
+			this._updateBindMatrixInverse( this.bindMatrix );
 
 		} else {
 
 			warn( 'SkinnedMesh: Unrecognized bindMode: ' + this.bindMode );
 
 		}
+
+	}
+
+	// Recomputes bindMatrixInverse from the given input matrix, unless the
+	// input is unchanged since the last computation (then the output would be
+	// bit-identical) and no direct write happened in between.
+
+	_updateBindMatrixInverse( input ) {
+
+		const cache = this._bindMatrixInverseCache;
+		const me = input.elements;
+
+		if ( this._bindMatrixInverseDirty === false &&
+			me[ 0 ] === cache[ 0 ] && me[ 1 ] === cache[ 1 ] && me[ 2 ] === cache[ 2 ] && me[ 3 ] === cache[ 3 ] &&
+			me[ 4 ] === cache[ 4 ] && me[ 5 ] === cache[ 5 ] && me[ 6 ] === cache[ 6 ] && me[ 7 ] === cache[ 7 ] &&
+			me[ 8 ] === cache[ 8 ] && me[ 9 ] === cache[ 9 ] && me[ 10 ] === cache[ 10 ] && me[ 11 ] === cache[ 11 ] &&
+			me[ 12 ] === cache[ 12 ] && me[ 13 ] === cache[ 13 ] && me[ 14 ] === cache[ 14 ] && me[ 15 ] === cache[ 15 ] ) {
+
+			return;
+
+		}
+
+		this.bindMatrixInverse.copy( input ).invert();
+
+		for ( let i = 0; i < 16; i ++ ) {
+
+			cache[ i ] = me[ i ];
+
+		}
+
+		this._bindMatrixInverseDirty = false;
 
 	}
 

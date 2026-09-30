@@ -1197,13 +1197,13 @@ class WebGLRenderer {
 
 		// Buffer rendering
 
-		this.renderBufferDirect = function ( camera, scene, geometry, material, object, group ) {
+		this.renderBufferDirect = function ( camera, scene, geometry, material, object, group, sideOverride = null ) {
 
 			if ( scene === null ) scene = _emptyScene; // renderBufferDirect second parameter used to be fog (could be null)
 
 			const frontFaceCW = ( object.isMesh && object.matrixWorld.determinantAffine() < 0 );
 
-			const program = setProgram( camera, scene, geometry, material, object );
+			const program = setProgram( camera, scene, geometry, material, object, sideOverride );
 
 			state.setMaterial( material, frontFaceCW );
 
@@ -2110,12 +2110,10 @@ class WebGLRenderer {
 						const currentSide = material.side;
 
 						material.side = BackSide;
-						material.needsUpdate = true;
 
-						renderObject( object, scene, camera, geometry, material, group );
+						renderObject( object, scene, camera, geometry, material, group, BackSide );
 
 						material.side = currentSide;
-						material.needsUpdate = true;
 
 						renderTargetNeedsUpdate = true;
 
@@ -2169,7 +2167,7 @@ class WebGLRenderer {
 
 		}
 
-		function renderObject( object, scene, camera, geometry, material, group ) {
+		function renderObject( object, scene, camera, geometry, material, group, sideOverride = null ) {
 
 			if ( _nodesHandler !== null && material.isNodeMaterial ) _nodesHandler.setObject( object, material );
 			object.onBeforeRender( _this, scene, camera, geometry, material, group );
@@ -2181,19 +2179,21 @@ class WebGLRenderer {
 
 			if ( material.transparent === true && material.side === DoubleSide && material.forceSinglePass === false ) {
 
+				// Two-pass double-sided rendering. The per-side programs are switched
+				// via sideOverride (see setProgram) instead of material.needsUpdate,
+				// avoiding a full program parameters + cache key recomputation per pass.
+
 				material.side = BackSide;
-				material.needsUpdate = true;
-				_this.renderBufferDirect( camera, scene, geometry, material, object, group );
+				_this.renderBufferDirect( camera, scene, geometry, material, object, group, BackSide );
 
 				material.side = FrontSide;
-				material.needsUpdate = true;
-				_this.renderBufferDirect( camera, scene, geometry, material, object, group );
+				_this.renderBufferDirect( camera, scene, geometry, material, object, group, FrontSide );
 
 				material.side = DoubleSide;
 
 			} else {
 
-				_this.renderBufferDirect( camera, scene, geometry, material, object, group );
+				_this.renderBufferDirect( camera, scene, geometry, material, object, group, sideOverride );
 
 			}
 
@@ -2214,6 +2214,11 @@ class WebGLRenderer {
 
 			const parameters = programCache.getParameters( material, lights.state, shadowsArray, scene, object, currentRenderState.state.lightProbeGridArray );
 			const programCacheKey = programCache.getProgramCacheKey( parameters );
+
+			// Remember the key so setProgram can memoize per-side programs without
+			// recomputing it (see sideProgramMemo below).
+
+			materialProperties.lastProgramCacheKey = programCacheKey;
 
 			let programs = materialProperties.programs;
 
@@ -2360,6 +2365,100 @@ class WebGLRenderer {
 
 		}
 
+		// Per-side program memoization for double-sided two-pass rendering.
+		//
+		// Switching between the BackSide/FrontSide programs of a material via
+		// material.needsUpdate forces a full program parameters + cache key
+		// recomputation on every pass. Instead, programs acquired on the slow path
+		// are remembered per side and reused while the regular steady-state checks
+		// in setProgram hold (which is exactly when the unmodified renderer would
+		// reuse the current program). Entries are validated against the programs
+		// map, so any current or future invalidation there self-heals via the
+		// legacy fallback.
+
+		function storeSideProgram( materialProperties, side, program ) {
+
+			let memo = materialProperties.sideProgramMemo;
+
+			if ( memo === undefined ) {
+
+				memo = materialProperties.sideProgramMemo = {};
+
+			}
+
+			memo[ side ] = { key: materialProperties.lastProgramCacheKey, program: program };
+
+		}
+
+		function getSideProgram( materialProperties, side ) {
+
+			const memo = materialProperties.sideProgramMemo;
+
+			if ( memo === undefined ) return null;
+
+			const entry = memo[ side ];
+
+			if ( entry === undefined ) return null;
+
+			if ( materialProperties.programs.get( entry.key ) !== entry.program ) return null;
+
+			return entry.program;
+
+		}
+
+		// Tail of getProgram() above, factored for reuse by the setProgram fast
+		// path: binds an already-acquired program to the material. Semantically
+		// identical to running getProgram() with an unchanged state (all values
+		// written here are covered by the setProgram steady-state checks).
+
+		function switchSideProgram( material, materialProperties, program, lights, lightsStateVersion ) {
+
+			const uniforms = materialProperties.uniforms;
+
+			if ( ( ! material.isShaderMaterial && ! material.isRawShaderMaterial ) || material.clipping === true ) {
+
+				uniforms.clippingPlanes = clipping.uniform;
+
+			}
+
+			materialProperties.needsLights = materialNeedsLights( material );
+			materialProperties.lightsStateVersion = lightsStateVersion;
+
+			if ( materialProperties.needsLights ) {
+
+				// wire up the material to this renderer's lighting state
+
+				uniforms.ambientLightColor.value = lights.state.ambient;
+				uniforms.lightProbe.value = lights.state.probe;
+				uniforms.sunLights.value = lights.state.sun;
+				uniforms.sunLightShadows.value = lights.state.sunShadow;
+				uniforms.directionalLights.value = lights.state.directional;
+				uniforms.directionalLightShadows.value = lights.state.directionalShadow;
+				uniforms.spotLights.value = lights.state.spot;
+				uniforms.spotLightShadows.value = lights.state.spotShadow;
+				uniforms.rectAreaLights.value = lights.state.rectArea;
+				uniforms.ltc_1.value = lights.state.rectAreaLTC1;
+				uniforms.ltc_2.value = lights.state.rectAreaLTC2;
+				uniforms.pointLights.value = lights.state.point;
+				uniforms.pointLightShadows.value = lights.state.pointShadow;
+				uniforms.hemisphereLights.value = lights.state.hemi;
+
+				uniforms.sunShadowMatrix.value = lights.state.sunShadowMatrix;
+				uniforms.sunShadowCascade.value = lights.state.sunShadowCascade;
+				uniforms.directionalShadowMatrix.value = lights.state.directionalShadowMatrix;
+				uniforms.spotLightMatrix.value = lights.state.spotLightMatrix;
+				uniforms.spotLightMap.value = lights.state.spotLightMap;
+				uniforms.pointShadowMatrix.value = lights.state.pointShadowMatrix;
+
+			}
+
+			materialProperties.lightProbeGrid = currentRenderState.state.lightProbeGridArray.length > 0;
+
+			materialProperties.currentProgram = program;
+			materialProperties.uniformsList = null;
+
+		}
+
 		function findLightProbeGrid( volumes, object ) {
 
 			if ( volumes.length === 0 ) return null;
@@ -2384,7 +2483,7 @@ class WebGLRenderer {
 
 		}
 
-		function setProgram( camera, scene, geometry, material, object ) {
+		function setProgram( camera, scene, geometry, material, object, sideOverride = null ) {
 
 			if ( scene.isScene !== true ) scene = _emptyScene; // scene could be a Mesh, Line, Points, ...
 
@@ -2557,9 +2656,74 @@ class WebGLRenderer {
 
 			let program = materialProperties.currentProgram;
 
+			if ( needsProgramChange === false && sideOverride !== null ) {
+
+				// Fast side switch for double-sided two-pass rendering: reuse the
+				// memoized side program instead of re-deriving parameters + key.
+
+				const sideProgram = getSideProgram( materialProperties, sideOverride );
+
+				if ( sideProgram !== null ) {
+
+					program = sideProgram;
+
+					switchSideProgram( material, materialProperties, program, lights, lights.state.version );
+
+					// notify the node builder that the program has changed so uniforms and update nodes can
+					// be cached and triggered.
+					if ( _nodesHandler && material.isNodeMaterial ) {
+
+						_nodesHandler.onUpdateProgram( material, program, materialProperties );
+
+					}
+
+					materialProperties.sidePassMarker = sideOverride;
+
+				} else {
+
+					// First use of this side (or evicted entry): legacy acquire, then memoize.
+
+					needsProgramChange = true;
+
+				}
+
+			} else if ( needsProgramChange === false && materialProperties.sidePassMarker !== null && materialProperties.sidePassMarker !== undefined && materialProperties.sidePassMarker !== material.side ) {
+
+				// A two-pass render left a side program bound; restore the program
+				// matching material.side.
+
+				const sideProgram = getSideProgram( materialProperties, material.side );
+
+				if ( sideProgram !== null ) {
+
+					program = sideProgram;
+
+					switchSideProgram( material, materialProperties, program, lights, lights.state.version );
+
+					// notify the node builder that the program has changed so uniforms and update nodes can
+					// be cached and triggered.
+					if ( _nodesHandler && material.isNodeMaterial ) {
+
+						_nodesHandler.onUpdateProgram( material, program, materialProperties );
+
+					}
+
+					materialProperties.sidePassMarker = material.side;
+
+				} else {
+
+					needsProgramChange = true;
+
+				}
+
+			}
+
 			if ( needsProgramChange === true ) {
 
 				program = getProgram( material, scene, object );
+
+				storeSideProgram( materialProperties, ( sideOverride !== null ) ? sideOverride : material.side, program );
+				materialProperties.sidePassMarker = ( sideOverride !== null ) ? sideOverride : material.side;
 
 				// notify the node builder that the program has changed so uniforms and update nodes can
 				// be cached and triggered.
